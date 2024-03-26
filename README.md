@@ -1,2 +1,6 @@
-# german_tax_report
-F-Taxes plugin to generate German tax reports
+# German Tax Report
+
+F-Taxes plugin to generate German tax reports.
+
+## FIFO Logic
+
