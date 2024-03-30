@@ -47,7 +47,7 @@ func (e *entry) Copy() entry {
 
 type entryList []entry
 
-func NewEntryFromTx(tx *proto.Trade) entry {
+func NewEntryFromTrade(tx *proto.Trade) entry {
 	return entry{
 		Amount:    g.D(tx.Amount, d.Zero),
 		Price:     g.D(tx.Price, d.Zero),

@@ -7,7 +7,7 @@ import (
 	"flag"
 	"os"
 
-	"gitea.codeblob.work/pk/gut/conf"
+	"github.com/f-taxes/german_tax_report/conf"
 	"github.com/f-taxes/german_tax_report/global"
 	g "github.com/f-taxes/german_tax_report/grpc_client"
 	"github.com/f-taxes/german_tax_report/reporting"

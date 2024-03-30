@@ -54,7 +54,7 @@ func (c *FTaxesClient) Connect(ctx context.Context) error {
 }
 
 func (c *FTaxesClient) ShowJobProgress(ctx context.Context, job *proto.JobProgress) error {
-	job.Plugin = global.Plugin.ID
+	job.Plugin = global.Plugin.Label
 	_, err := c.GrpcClient.ShowJobProgress(ctx, job)
 	return err
 }

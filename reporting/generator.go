@@ -44,16 +44,16 @@ func (r *Generator) Start() error {
 func (r *Generator) process(recordChan chan *proto.Record) {
 	for rec := range recordChan {
 		if rec.Trade != nil {
-			tx := rec.Trade
+			trade := rec.Trade
 
-			r.accounts.Add(tx.Asset, fifo.NewEntryFromTx(tx))
+			r.accounts.Add(trade.Asset, fifo.NewEntryFromTrade(trade))
 
-			fmt.Printf("take: %s of %s\n", D(tx.Amount).Mul(D(tx.Price)), tx.Quote)
-			pastEntries, err := r.accounts.Take(tx.Quote, D(tx.Amount).Mul(D(tx.Price)))
+			fmt.Printf("take: %s of %s\n", D(trade.Amount).Mul(D(trade.Price)), trade.Quote)
+			pastEntries, err := r.accounts.Take(trade.Quote, D(trade.Amount).Mul(D(trade.Price)))
 			fmt.Printf("%+v\n", pastEntries)
 
 			if err != nil {
-				golog.Errorf("Failed to get record for %s out of fifo queue: %v", tx.Quote, err)
+				golog.Errorf("Failed to get record for %s out of fifo queue: %v", trade.Quote, err)
 				continue
 			}
 
@@ -64,10 +64,10 @@ func (r *Generator) process(recordChan chan *proto.Record) {
 			}
 
 			fmt.Printf("total cost: %s €\n", totalCostC)
-			fee := D(tx.Fee).Mul(D(tx.FeePriceC))
-			fmt.Printf("selling value: %s €\n", D(tx.ValueC).Sub(fee))
+			fee := D(trade.FeeC)
+			fmt.Printf("selling value: %s €\n", D(trade.ValueC).Sub(fee))
 
-			fmt.Printf("pnl: %s €\n", D(tx.ValueC).Sub(fee).Sub(totalCostC))
+			fmt.Printf("pnl: %s €\n", D(trade.ValueC).Sub(fee).Sub(totalCostC))
 			// fifoAssetMap := r.accounts.Get(tx.Account).Get(tx.Asset)
 
 			// if fifoAssetMap.BaseDirectionInverted == BASE_DIR_NONE {

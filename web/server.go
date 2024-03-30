@@ -4,9 +4,9 @@ import (
 	"embed"
 	"net/http"
 
-	"gitea.codeblob.work/pk/gut/conf"
-	iu "gitea.codeblob.work/pk/gut/irisutils"
+	"github.com/f-taxes/german_tax_report/conf"
 	"github.com/f-taxes/german_tax_report/global"
+	iu "github.com/f-taxes/german_tax_report/irisutils"
 	"github.com/kataras/golog"
 	"github.com/kataras/iris/v12"
 	"github.com/kataras/iris/v12/view"
