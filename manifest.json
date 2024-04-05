@@ -16,10 +16,10 @@
     "darwin": "https://github.com/f-taxes/german_tax_report/releases/download/1.0.0/german_tax_report-darwin.zip"
   },
   "ctl": {
-    "address": "127.0.0.1:41001"
+    "address": "127.0.0.1:4102"
   },
   "web": {
-    "address": "127.0.0.1:41000",
+    "address": "127.0.0.1:4103",
     "configPage": "/config"
   }
 }
