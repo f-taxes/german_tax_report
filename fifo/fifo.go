@@ -7,16 +7,62 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/f-taxes/german_tax_report/global"
 	d "github.com/shopspring/decimal"
 )
 
-// type baseDir int
+const (
+	ERR_NO_ENTRY = iota
+	ERR_INSUFFICIENT
+)
 
-// const (
-// 	BASE_DIR_NONE = baseDir(iota)
-// 	BASE_DIR_LONG
-// 	BASE_DIR_SHORT
-// )
+type FifoError struct {
+	Code           int
+	RequiredAmount string
+	MissingAmount  string
+	err            string
+}
+
+func (f FifoError) Error() string {
+	return f.err
+}
+
+func NewFifoError(code int, err string) FifoError {
+	return FifoError{
+		Code: code,
+		err:  err,
+	}
+}
+
+func NewFifoTakeError(code int, err string, reqAmount, missingAmount string) FifoError {
+	return FifoError{
+		Code:           code,
+		RequiredAmount: reqAmount,
+		MissingAmount:  missingAmount,
+		err:            err,
+	}
+}
+
+func IsFifoErrorNoEntry(err error, code int) bool {
+	if ferr, ok := err.(FifoError); ok {
+		return ferr.Code == ERR_NO_ENTRY
+	}
+
+	return false
+}
+
+func IsFifoErrorInsufficient(err error, code int) bool {
+	if ferr, ok := err.(FifoError); ok {
+		return ferr.Code == ERR_INSUFFICIENT
+	}
+
+	return false
+}
+
+func IsFifoError(err error) bool {
+	_, ok := err.(FifoError)
+	return ok
+}
 
 type Entry struct {
 	Units          d.Decimal
@@ -48,45 +94,35 @@ func (e EntryList) TotalUnits() d.Decimal {
 	return s
 }
 
-func (e EntryList) TotalFeeEur() d.Decimal {
+func (e EntryList) TotalUnitsLeft() d.Decimal {
 	s := d.Zero
 
 	for i := range e {
-		s = s.Add(e[i].UnitFeeCostEur)
+		s = s.Add(e[i].UnitsLeft)
 	}
 
 	return s
 }
 
-func NewEntryFromTrade(amount, valueC, feeC d.Decimal, ts time.Time) Entry {
+func (e EntryList) Copy() EntryList {
+	n := EntryList{}
+
+	for i := range e {
+		n = append(n, e[i].Copy())
+	}
+
+	return n
+}
+
+func NewEntry(amount, valueC, feeC d.Decimal, ts time.Time) Entry {
 	return Entry{
 		Units:          amount.Copy(),
 		UnitsLeft:      amount.Copy(),
-		UnitCostEur:    valueC.Div(amount),
-		UnitFeeCostEur: feeC.Div(amount),
+		UnitCostEur:    valueC.Div(amount).Round(4),
+		UnitFeeCostEur: feeC.Div(amount).Round(4),
 		Ts:             ts,
 	}
 }
-
-// func NewEntryFromTransfer(tx *proto.Transfer) Entry {
-// 	price := d.Zero
-// 	priceC := d.Zero
-
-// 	if tx.Action == proto.TransferAction_DEPOSIT || tx.Action == proto.TransferAction_WITHDRAWAL {
-// 		price = g.D("1")
-// 		priceC = g.D("1")
-// 	}
-
-// 	return Entry{
-// 		Amount: g.D(tx.Amount, d.Zero),
-// 		CostEur: ,
-// 		Fee:    g.D(tx.Fee, d.Zero),
-// 		FeeC:   g.D(tx.FeeC, d.Zero),
-// 		Price:  price,
-// 		PriceC: priceC,
-// 		Ts:     tx.Ts.AsTime(),
-// 	}
-// }
 
 func (e EntryList) Sort() {
 	sort.Slice(e, func(i, j int) bool {
@@ -105,6 +141,7 @@ func (e EntryList) Print() string {
 
 type Asset struct {
 	Name    string
+	Total   string
 	Entries EntryList
 	// baseDir baseDir
 }
@@ -133,8 +170,8 @@ func (f *Fifo) Add(assetName string, e Entry) {
 	if _, ok := f.assets[assetName]; !ok {
 		f.assets[assetName] = Asset{
 			Name:    assetName,
+			Total:   "0",
 			Entries: EntryList{},
-			// baseDir: BASE_DIR_NONE,
 		}
 	}
 
@@ -144,51 +181,112 @@ func (f *Fifo) Add(assetName string, e Entry) {
 	f.assets[assetName] = a
 }
 
+// func (f *Fifo) Prepend(assetName string, e Entry) {
+// 	if _, ok := f.assets[assetName]; !ok {
+// 		f.assets[assetName] = Asset{
+// 			Name:    assetName,
+// 			Entries: EntryList{},
+// 		}
+// 	}
+
+// 	a := f.assets[assetName]
+// 	a.Entries = append(EntryList{e}, a.Entries...)
+// 	a.Entries.Sort()
+// 	f.assets[assetName] = a
+// }
+
 func (f *Fifo) Read(assetName string) Asset {
-	return f.assets[assetName]
+	asset := f.assets[assetName]
+	return Asset{
+		Name:    asset.Name,
+		Total:   asset.Entries.TotalUnitsLeft().String(),
+		Entries: asset.Entries.Copy(),
+	}
 }
 
-func (f *Fifo) Take(assetName string, units d.Decimal) (EntryList, error) {
+func (f *Fifo) HasUnits(assetName string) bool {
 	a, ok := f.assets[assetName]
 
 	if !ok {
-		return nil, errors.New("no entry for this asset")
+		return false
 	}
 
-	result := EntryList{}
+	if len(a.Entries) == 0 {
+		return false
+	}
+
+	if f.getOldestAvailableEntry(a.Entries) == -1 {
+		return false
+	}
+
+	return true
+}
+
+func (f *Fifo) CouldTake(assetName string, units d.Decimal, decimals int32) bool {
+	_, err := f.take(assetName, units, true, decimals)
+	return err == nil
+}
+
+func (f *Fifo) Take(assetName string, units d.Decimal, decimals int32) (Asset, error) {
+	return f.take(assetName, units, false, decimals)
+}
+
+func (f *Fifo) take(assetName string, units d.Decimal, simulated bool, decimals int32) (Asset, error) {
+	a, ok := f.assets[assetName]
+
+	if !ok {
+		return Asset{}, NewFifoError(ERR_NO_ENTRY, "no entry for this asset")
+	}
+
+	units = g.RoundIfFiat(assetName, units)
+
+	entries := a.Entries
+
+	if simulated {
+		entries = a.Entries.Copy()
+	}
+
+	result := Asset{
+		Name:    assetName,
+		Total:   "0",
+		Entries: EntryList{},
+	}
 	rest := units.Copy()
 
 	for {
-		if len(a.Entries) == 0 {
+		if len(entries) == 0 {
 			if rest.GreaterThan(d.Zero) {
 				return result, errors.New("incomplete")
 			}
 			break
 		}
 
-		oldestIdx := f.getOldestAvailableEntry(a.Entries)
+		oldestIdx := f.getOldestAvailableEntry(entries)
 
 		if oldestIdx == -1 {
-			return result, fmt.Errorf("insufficient assets in fifo queue to take %s %s", units, assetName)
+			return result, NewFifoTakeError(ERR_NO_ENTRY, fmt.Sprintf("insufficient assets in fifo queue to take %s %s (rest=%s)", units, assetName, rest), units.String(), rest.String())
 		}
 
-		oldest := a.Entries[oldestIdx]
+		oldest := entries[oldestIdx]
+
+		// rest = g.FixRoundingIfFiat(assetName, rest, oldest.UnitsLeft)
 
 		if rest.LessThanOrEqual(oldest.UnitsLeft) {
 			r := oldest.Copy()
 			r.UnitsLeft = rest
-			result = append(result, r)
+			result.Entries = append(result.Entries, r)
+			result.Total = result.Entries.TotalUnitsLeft().String()
 
-			oldest.UnitsLeft = oldest.UnitsLeft.Sub(rest)
-			a.Entries[oldestIdx] = oldest
+			// oldest.UnitsLeft = g.RoundIfFiat(assetName, oldest.UnitsLeft.Sub(rest))
+			oldest.UnitsLeft = oldest.UnitsLeft.Sub(rest).Round(decimals)
+			entries[oldestIdx] = oldest
 
-			f.assets[assetName] = a
 			return result, nil
 		} else {
-			rest = rest.Sub(oldest.UnitsLeft)
-			result = append(result, oldest.Copy())
-			a.Entries[oldestIdx].UnitsLeft = d.Zero
-			f.assets[assetName] = a
+			rest = rest.Sub(oldest.UnitsLeft).Round(decimals)
+			result.Entries = append(result.Entries, oldest.Copy())
+			result.Total = result.Entries.TotalUnitsLeft().String()
+			entries[oldestIdx].UnitsLeft = d.Zero
 		}
 	}
 

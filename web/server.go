@@ -3,10 +3,11 @@ package web
 import (
 	"embed"
 	"net/http"
+	"time"
 
 	"github.com/f-taxes/german_tax_report/conf"
 	"github.com/f-taxes/german_tax_report/global"
-	iu "github.com/f-taxes/german_tax_report/irisutils"
+	"github.com/f-taxes/german_tax_report/reporting"
 	"github.com/kataras/golog"
 	"github.com/kataras/iris/v12"
 	"github.com/kataras/iris/v12/view"
@@ -25,10 +26,33 @@ func Start(address string, webAssets embed.FS) {
 
 	registerFrontend(app, webAssets)
 
-	app.Post("/report", func(ctx iris.Context) {
+	app.Post("/report/generate", func(ctx iris.Context) {
+		reqData := struct {
+			Year int `json:"year"`
+		}{}
 
-		ctx.JSON(iu.Resp{
+		if !global.ReadJSON(ctx, &reqData) {
+			return
+		}
+
+		gerTZ, err := time.LoadLocation("Europe/Berlin")
+		if err != nil {
+			golog.Error(err)
+			ctx.JSON(global.Resp{
+				Result: false,
+			})
+			return
+		}
+
+		from := time.Date(2000, time.January, 1, 0, 0, 0, 0, gerTZ).In(time.UTC)
+		to := time.Date(reqData.Year, time.December, 31, 23, 59, 59, 0, gerTZ).In(time.UTC)
+		generator := reporting.NewGenerator()
+
+		generator.Start(from, to)
+
+		ctx.JSON(global.Resp{
 			Result: true,
+			Data:   generator.Recs,
 		})
 	})
 
@@ -57,7 +81,7 @@ func registerFrontend(app *iris.Application, webAssets embed.FS) {
 	app.RegisterView(frontendTpl)
 	app.OnAnyErrorCode(index)
 
-	app.Get("/", index)
+	// app.Get("/", index)
 	app.Get("/{p:path}", index)
 }
 

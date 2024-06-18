@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"flag"
 	"os"
+	"time"
 
 	"github.com/f-taxes/german_tax_report/conf"
 	"github.com/f-taxes/german_tax_report/global"
 	g "github.com/f-taxes/german_tax_report/grpc_client"
-	"github.com/f-taxes/german_tax_report/reporting"
 	"github.com/f-taxes/german_tax_report/web"
 	"github.com/kataras/golog"
 )
@@ -42,14 +42,18 @@ func main() {
 	g.GrpcClient = g.NewFTaxesClient(*grpcAddress)
 
 	err := g.GrpcClient.Connect(ctx)
-
 	if err != nil {
 		golog.Fatal(err)
 	}
 
-	conf.LoadAppConfig("config.yaml")
+	go func() {
+		for {
+			g.GrpcClient.PluginHeartbeat(context.Background())
+			time.Sleep(time.Second * 5)
+		}
+	}()
 
-	reporting.NewGenerator().Start()
+	conf.LoadAppConfig("config.yaml")
 
 	web.Start(global.Plugin.Web.Address, WebAssets)
 

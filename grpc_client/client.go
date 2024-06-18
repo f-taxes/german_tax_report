@@ -88,3 +88,8 @@ func (c *FTaxesClient) StreamRecords(ctx context.Context, job *proto.StreamRecor
 	<-done
 	return nil
 }
+
+func (c *FTaxesClient) PluginHeartbeat(ctx context.Context) error {
+	_, err := c.GrpcClient.PluginHeartbeat(ctx, &proto.PluginInfo{ID: global.Plugin.ID, Version: global.Plugin.Version})
+	return err
+}

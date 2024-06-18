@@ -5,7 +5,7 @@ This program is available under Apache License Version 2.0
 */
 
 import '@tp/tp-router/tp-router.js';
-import './the-files.js';
+import './the-report.js';
 import { LitElement, html, css } from 'lit';
 import theme from './styles/theme.js';
 import shared from './styles/shared.js';
@@ -39,11 +39,12 @@ class TheApp extends LitElement {
 
     return html`
       <tp-router @data-changed=${this.routeDataChanged}>
-        <tp-route path="/config" data="files"></tp-route>
+        <tp-route path="/report" data="report"></tp-route>
+        <tp-route path="/config" data="config"></tp-route>
       </tp-router>
       
       <div class="main">
-        ${page === 'files' ? html`<the-files .active=${page === 'files'}></the-files>` : null }
+        ${page === 'report' ? html`<the-report .active=${page === 'report'}></the-report>` : null }
       </div>
     `;
   }

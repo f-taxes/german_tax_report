@@ -1,0 +1,122 @@
+[
+  {
+    "Ts": "2024-02-01T22:10:15.335Z",
+    "Type": "deposit",
+    "Account": "Test1",
+    "Asset": "EUR",
+    "Amount": "4000",
+    "Fee": "0",
+    "FeeEur": "0",
+    "Source": "Bank",
+    "Entries": [
+      {
+        "Units": "4000",
+        "UnitsLeft": "4000",
+        "UnitCostEur": "1",
+        "UnitFeeCostEur": "0",
+        "Ts": "2024-02-01T22:10:15.335Z"
+      }
+    ],
+    "Error": "",
+    "Warning": "No records about how this deposit came do be. Assuming bank account transfer."
+  },
+  {
+    "Ts": "2024-03-01T22:08:32.374Z",
+    "Type": "conversion",
+    "Account": "Test1",
+    "From": "EUR",
+    "To": "USD",
+    "ToAmount": "6400",
+    "ToAmountEur": "4000",
+    "FromAmount": "4000",
+    "FromAmountEur": "4000",
+    "FromEntries": [
+      {
+        "Units": "4000",
+        "UnitsLeft": "4000",
+        "UnitCostEur": "1",
+        "UnitFeeCostEur": "0",
+        "Ts": "2024-02-01T22:10:15.335Z"
+      }
+    ],
+    "Price": "0.625",
+    "PriceEur": "0.625",
+    "FeeCurrency": "USD",
+    "Fee": "0",
+    "QuoteFeeCurrency": "USD",
+    "QuoteFee": "0",
+    "FeeEur": "0",
+    "Result": {
+      "CostEur": "4000",
+      "ValueEur": "4000",
+      "PnlEur": "0",
+      "FeePayedEur": "0"
+    }
+  },
+  {
+    "Ts": "2024-04-01T10:00:44.686Z",
+    "Type": "conversion",
+    "Account": "Test1",
+    "From": "USD",
+    "To": "BTC",
+    "ToAmount": "10",
+    "ToAmountEur": "3000",
+    "FromAmount": "4800",
+    "FromAmountEur": "3000",
+    "FromEntries": [
+      {
+        "Units": "6400",
+        "UnitsLeft": "4800",
+        "UnitCostEur": "0.625",
+        "UnitFeeCostEur": "0",
+        "Ts": "2024-03-01T22:08:32.374Z"
+      }
+    ],
+    "Price": "480",
+    "PriceEur": "300",
+    "FeeCurrency": "BTC",
+    "Fee": "0",
+    "QuoteFeeCurrency": "USD",
+    "QuoteFee": "16",
+    "FeeEur": "10",
+    "Result": {
+      "CostEur": "3000",
+      "ValueEur": "2990",
+      "PnlEur": "-10",
+      "FeePayedEur": "10"
+    }
+  },
+  {
+    "Ts": "2024-04-01T22:00:44.686Z",
+    "Type": "conversion",
+    "Account": "Test1",
+    "From": "BTC",
+    "To": "ETH",
+    "ToAmount": "40",
+    "ToAmountEur": "800",
+    "FromAmount": "2",
+    "FromAmountEur": "800",
+    "FromEntries": [
+      {
+        "Units": "10",
+        "UnitsLeft": "2",
+        "UnitCostEur": "300",
+        "UnitFeeCostEur": "1",
+        "Ts": "2024-04-01T10:00:44.686Z"
+      }
+    ],
+    "Price": "0.05",
+    "PriceEur": "20",
+    "FeeCurrency": "ETH",
+    "Fee": "0",
+    "QuoteFeeCurrency": "BTC",
+    "QuoteFee": "0.02",
+    "FeeEur": "8",
+    "Result": {
+      "CostEur": "602",
+      "ValueEur": "792",
+      "PnlEur": "190",
+      "FeePayedEur": "8"
+    }
+  }
+]
