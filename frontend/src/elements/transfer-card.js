@@ -75,6 +75,15 @@ class TransferCard extends clipboard(LitElement) {
           margin-top: 10px;
           border-radius: 4px;
         }
+
+        .error {
+          background: rgb(92, 14, 14);
+          font-weight: bold;
+          color: #ffffff;
+          padding: 5px;
+          margin-top: 10px;
+          border-radius: 4px;
+        }
       `
     ];
   }
@@ -128,6 +137,9 @@ class TransferCard extends clipboard(LitElement) {
             </div>
           </div>
         </div>
+        ${entry.Error ? html`
+          <div class="error">${entry.Error}</div>
+        ` : null}
         ${entry.Warning ? html`
           <div class="warning">${entry.Warning}</div>
         ` : null}

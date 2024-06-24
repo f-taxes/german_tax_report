@@ -11,17 +11,19 @@ import (
 )
 
 type Deposit struct {
-	Ts      time.Time
-	Type    string
-	Account string
-	Asset   string
-	Amount  decimal.Decimal
-	Fee     decimal.Decimal
-	FeeEur  decimal.Decimal
-	Source  string
-	Entries fifo.EntryList
-	Error   string
-	Warning string
+	Ts          time.Time
+	Type        string
+	Account     string
+	Asset       string
+	Amount      decimal.Decimal
+	Fee         decimal.Decimal
+	FeeEur      decimal.Decimal
+	Source      string
+	Entries     fifo.EntryList
+	QueueBefore []fifo.Asset
+	QueueAfter  []fifo.Asset
+	Error       string
+	Warning     string
 }
 
 type Withdrawal struct {
@@ -35,6 +37,8 @@ type Withdrawal struct {
 	FeeEur      decimal.Decimal
 	Destination string
 	Entries     fifo.EntryList
+	QueueBefore []fifo.Asset
+	QueueAfter  []fifo.Asset
 	Error       string
 	Warning     string
 }
@@ -49,9 +53,13 @@ type Conversion struct {
 	To               string    // = Base asset for bus, quote asset for sells.
 	ToDecimals       int32     // = Number of decimals of either the quote or base asset. Depending on the direction of the trade.
 	ToAmount         d.Decimal // = Amount
+	ToAmountNet      d.Decimal // = Amount - Fee
 	ToAmountEur      d.Decimal // = Amount * QuotePriceC
+	ToAmountNetEur   d.Decimal // = Amount * QuotePriceC - QuoteFeeC
 	FromAmount       d.Decimal // = Value
+	FromAmountNet    d.Decimal // = Value - FeeC
 	FromAmountEur    d.Decimal // = ValueC
+	FromAmountNetEur d.Decimal // = ValueC - FeeC
 	FromEntries      []fifo.Asset
 	QueueBefore      []fifo.Asset
 	QueueAfter       []fifo.Asset
@@ -84,6 +92,8 @@ func (r *Generator) TradeToConversion(trade *proto.Trade) *Conversion {
 	if trade.Action == proto.TxAction_BUY {
 		toFee := D(trade.Fee).Abs()
 		toFeeC := D(trade.FeeC).Abs()
+		fromFee := D(trade.QuoteFee).Abs()
+		fromFeeC := D(trade.QuoteFeeC).Abs()
 
 		return &Conversion{
 			RecID:            trade.TxID,
@@ -96,10 +106,14 @@ func (r *Generator) TradeToConversion(trade *proto.Trade) *Conversion {
 			FromDecimals:     trade.QuoteDecimals,
 			Price:            D(trade.Price).Round(IfThen(trade.QuoteDecimals > 0, trade.QuoteDecimals, 8)),
 			PriceEur:         D(trade.PriceC).Round(4),
-			ToAmount:         D(trade.Amount).Sub(toFee).Round(IfThen(trade.AssetDecimals > 0, trade.AssetDecimals, 8)),
-			ToAmountEur:      D(trade.Amount).Mul(D(trade.PriceC)).Sub(toFeeC).Round(4),
+			ToAmount:         D(trade.Amount).Round(IfThen(trade.AssetDecimals > 0, trade.AssetDecimals, 8)),
+			ToAmountNet:      D(trade.Amount).Sub(toFee).Round(IfThen(trade.AssetDecimals > 0, trade.AssetDecimals, 8)),
+			ToAmountEur:      D(trade.Amount).Mul(D(trade.PriceC)).Round(4),
+			ToAmountNetEur:   D(trade.Amount).Mul(D(trade.PriceC)).Sub(toFeeC).Round(4),
 			FromAmount:       D(trade.Value).Round(IfThen(trade.QuoteDecimals > 0, trade.QuoteDecimals, 8)),
+			FromAmountNet:    D(trade.Value).Sub(fromFee).Round(IfThen(trade.QuoteDecimals > 0, trade.QuoteDecimals, 8)),
 			FromAmountEur:    D(trade.ValueC).Round(4),
+			FromAmountNetEur: D(trade.ValueC).Sub(fromFeeC).Round(4),
 			FeeCurrency:      trade.FeeCurrency,
 			Fee:              D(trade.Fee).Round(IfThen(trade.FeeDecimals > 0, trade.FeeDecimals, 8)),
 			FeeDecimals:      trade.FeeDecimals,
@@ -138,26 +152,32 @@ func (r *Generator) TradeToConversion(trade *proto.Trade) *Conversion {
 		toAmount := D(trade.Value)
 		fromFee := D(trade.Fee)
 		fromFeeC := D(trade.FeeC)
+		toFee := D(trade.QuoteFee).Abs()
+		toFeeC := D(trade.QuoteFeeC).Abs()
 		// toFee := D(trade.QuoteFee).Abs()
 		// toFeeC := D(trade.QuoteFeeC).Abs()
 
 		c := &Conversion{
-			RecID:        trade.TxID,
-			Ts:           trade.Ts.AsTime(),
-			Type:         "conversion",
-			Account:      trade.Account,
-			To:           trade.Quote,
-			ToDecimals:   trade.QuoteDecimals,
-			From:         trade.Asset,
-			FromDecimals: trade.AssetDecimals,
-			Price:        price,
-			PriceEur:     priceC.Round(4),
-			ToAmount:     toAmount.Round(IfThen(trade.QuoteDecimals > 0, trade.QuoteDecimals, 8)),
-			ToAmountEur:  toAmount.Mul(D(trade.QuotePriceC)).Round(4),
+			RecID:          trade.TxID,
+			Ts:             trade.Ts.AsTime(),
+			Type:           "conversion",
+			Account:        trade.Account,
+			To:             trade.Quote,
+			ToDecimals:     trade.QuoteDecimals,
+			From:           trade.Asset,
+			FromDecimals:   trade.AssetDecimals,
+			Price:          price,
+			PriceEur:       priceC.Round(4),
+			ToAmount:       toAmount.Round(IfThen(trade.QuoteDecimals > 0, trade.QuoteDecimals, 8)),
+			ToAmountNet:    toAmount.Sub(toFee).Round(IfThen(trade.QuoteDecimals > 0, trade.QuoteDecimals, 8)),
+			ToAmountEur:    toAmount.Mul(D(trade.QuotePriceC)).Round(4),
+			ToAmountNetEur: toAmount.Mul(D(trade.QuotePriceC)).Sub(toFeeC).Round(4),
 			// ToAmount:         toAmount.Sub(toFee).Round(IfThen(trade.QuoteDecimals > 0, trade.QuoteDecimals, 8)),
 			// ToAmountEur:      toAmount.Mul(D(trade.QuotePriceC)).Sub(toFeeC).Round(4),
-			FromAmount:       value.Sub(fromFee),
-			FromAmountEur:    value.Sub(fromFeeC).Round(4),
+			FromAmount:       value,
+			FromAmountNet:    value.Sub(fromFee),
+			FromAmountEur:    value.Round(4),
+			FromAmountNetEur: value.Sub(fromFeeC).Round(4),
 			FeeCurrency:      trade.FeeCurrency,
 			Fee:              D(trade.Fee),
 			FeeDecimals:      trade.FeeDecimals,

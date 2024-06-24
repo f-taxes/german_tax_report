@@ -84,7 +84,7 @@ func (r *Generator) Start(from, to time.Time) error {
 
 func (r *Generator) processTransfer(transfer *proto.Transfer) (w *Withdrawal) {
 	if transfer.Action == proto.TransferAction_DEPOSIT {
-		deposit := Deposit{
+		deposit := &Deposit{
 			Ts:      transfer.Ts.AsTime(),
 			Type:    "deposit",
 			Asset:   transfer.Asset,
@@ -95,13 +95,33 @@ func (r *Generator) processTransfer(transfer *proto.Transfer) (w *Withdrawal) {
 			FeeEur:  D(transfer.FeeC),
 		}
 
+		defer func() {
+			deposit.QueueAfter = append(deposit.QueueAfter, r.accounts.Get(deposit.Account).Read(deposit.Asset))
+		}()
+
+		deposit.QueueBefore = append(deposit.QueueBefore, r.accounts.Get(deposit.Account).Read(deposit.Asset))
+
 		var matching *Withdrawal
 
 		for i, w := range r.recentWithdrawals {
+			if w.Entries.TotalUnitsLeft().IsZero() {
+				fmt.Printf("%+v\n", "now")
+			}
 			if w.Destination == transfer.Account && w.Ts.Sub(transfer.Ts.AsTime()).Abs() < time.Minute*15 && global.PercentageDelta(D(transfer.Amount), w.Entries.TotalUnitsLeft()).LessThan(D("10")) {
 				matching = r.recentWithdrawals[i]
 				r.recentWithdrawals = global.RemoveElementUnordered(r.recentWithdrawals, i)
 				break
+			}
+		}
+
+		deductFees := func() {
+			if D(transfer.Fee).GreaterThan(d.Zero) {
+				feeAssets, err := r.accounts.Get(transfer.Account).Take(transfer.FeeCurrency, D(transfer.Fee), transfer.FeeDecimals)
+				if err != nil {
+					golog.Errorf("Failed to withdraw %s %s from %s: %v", transfer.Amount, transfer.Asset, transfer.Account, err)
+				}
+
+				deposit.Entries = append(deposit.Entries, feeAssets.Entries...)
 			}
 		}
 
@@ -112,6 +132,8 @@ func (r *Generator) processTransfer(transfer *proto.Transfer) (w *Withdrawal) {
 			for _, e := range deposit.Entries {
 				r.accounts.Get(transfer.Account).Add(transfer.Asset, e.Copy())
 			}
+
+			deductFees()
 		}
 
 		if matching == nil {
@@ -128,6 +150,8 @@ func (r *Generator) processTransfer(transfer *proto.Transfer) (w *Withdrawal) {
 				r.Recs = append(r.Recs, deposit)
 
 				r.accounts.Get(transfer.Account).Add(transfer.Asset, entry)
+
+				deductFees()
 			} else {
 				deposit.Error = "No prior withdrawal found to explain how this deposit was possible."
 				r.Recs = append(r.Recs, deposit)
@@ -136,6 +160,24 @@ func (r *Generator) processTransfer(transfer *proto.Transfer) (w *Withdrawal) {
 	}
 
 	if transfer.Action == proto.TransferAction_WITHDRAWAL {
+		w = &Withdrawal{
+			RecID:       transfer.TxID,
+			Ts:          transfer.Ts.AsTime(),
+			Type:        "withdrawal",
+			Account:     transfer.Account,
+			Asset:       transfer.Asset,
+			Amount:      D(transfer.Amount),
+			Destination: transfer.Destination,
+			Fee:         D(transfer.Fee),
+			FeeEur:      D(transfer.FeeC),
+		}
+
+		defer func() {
+			w.QueueAfter = append(w.QueueAfter, r.accounts.Get(w.Account).Read(w.Asset))
+		}()
+
+		w.QueueBefore = append(w.QueueBefore, r.accounts.Get(w.Account).Read(w.Asset))
+
 		asset, err := r.accounts.Get(transfer.Account).Take(transfer.Asset, D(transfer.Amount), transfer.AssetDecimals)
 		if err != nil {
 			golog.Errorf("Failed to withdraw %s %s from %s: %v", transfer.Amount, transfer.Asset, transfer.Account, err)
@@ -150,18 +192,7 @@ func (r *Generator) processTransfer(transfer *proto.Transfer) (w *Withdrawal) {
 			asset.Entries = append(asset.Entries, feeAssets.Entries...)
 		}
 
-		w = &Withdrawal{
-			RecID:       transfer.TxID,
-			Ts:          transfer.Ts.AsTime(),
-			Type:        "withdrawal",
-			Account:     transfer.Account,
-			Asset:       transfer.Asset,
-			Amount:      D(transfer.Amount),
-			Destination: transfer.Destination,
-			Entries:     asset.Entries,
-			Fee:         D(transfer.Fee),
-			FeeEur:      D(transfer.FeeC),
-		}
+		w.Entries = asset.Entries
 
 		r.recentWithdrawals = append(r.recentWithdrawals, w)
 
@@ -268,7 +299,7 @@ func (r *Generator) processTrade(trade *proto.Trade) (c *Conversion) {
 		return r.processMarginTrade(trade)
 	}
 
-	if trade.Value == "3740.56051" {
+	if trade.TxID == "TOJR4D-NEMAS-OPPYCO" {
 		fmt.Printf("%+v\n", "now")
 	}
 

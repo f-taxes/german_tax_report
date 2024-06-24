@@ -131,14 +131,18 @@ class TheReport extends fetchMixin(DomQuery(LitElement)) {
         </div>
         ${selItem ? html`
           <div class="details">
+            ${Array.isArray(selItem.QueueBefore) && selItem.QueueBefore.filter(entry => entry.Name !== '').length > 0 ? html`
             <div>
               Queue Before:
               ${selItem.QueueBefore.map(asset => this.renderQueueRecs(asset))}
             </div>
+            ` : null}
+            ${Array.isArray(selItem.FromEntries) ? html`
             <div>
               Extracted Queue Entries:
               ${selItem.FromEntries.map(asset => this.renderQueueRecs(asset))}
             </div>
+            ` : null}
             <div>
               Queue After:
               ${selItem.QueueAfter.map(asset => this.renderQueueRecs(asset))}
@@ -155,7 +159,7 @@ class TheReport extends fetchMixin(DomQuery(LitElement)) {
     }
 
     if (item.Type === 'deposit' || item.Type === 'withdrawal') {
-      return html`<transfer-card .entry=${item}></transfer-card>`;
+      return html`<transfer-card .itemIdx=${idx} ?selected=${selected} .entry=${item}></transfer-card>`;
     }
   }
 
@@ -224,7 +228,7 @@ class TheReport extends fetchMixin(DomQuery(LitElement)) {
   }
 
   itemClick(e) {
-    const itemEl = closest(e.target, 'conversion-card');
+    const itemEl = closest(e.target, 'conversion-card') || closest(e.target, 'transfer-card');
     if (!itemEl) return;
 
     this.selIdx = itemEl.itemIdx;
