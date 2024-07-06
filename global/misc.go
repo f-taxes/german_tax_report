@@ -14,3 +14,7 @@ func IfThen[T any](cond bool, thenVal, elseVal T) T {
 	}
 	return elseVal
 }
+
+func IsFiatCurrency(currency string) bool {
+	return FiatCurrencies[currency]
+}

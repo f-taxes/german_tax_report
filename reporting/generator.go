@@ -137,7 +137,7 @@ func (r *Generator) processTransfer(transfer *proto.Transfer) (w *Withdrawal) {
 		}
 
 		if matching == nil {
-			if transfer.Asset == "EUR" {
+			if global.IsFiatCurrency(transfer.Asset) {
 				entry := fifo.Entry{
 					Units:       D(transfer.Amount, d.Zero),
 					UnitsLeft:   D(transfer.Amount, d.Zero),
@@ -216,17 +216,35 @@ func (r *Generator) processMarginTrade(trade *proto.Trade) (c *Conversion) {
 	c = r.TradeToConversion(trade)
 	key := fmt.Sprintf("%s_%s", c.Account, trade.Ticker)
 
+	acc := r.accounts.Get(c.Account, "margin")
+
 	defer func() {
+		if r.accounts.Get(c.Account).HasUnits(c.To) {
+			c.QueueAfter = append(c.QueueAfter, acc.Read(c.To))
+		}
+
+		if r.accounts.Get(c.Account).HasUnits(c.From) {
+			c.QueueAfter = append(c.QueueAfter, acc.Read(c.From))
+		}
+
 		r.Recs = append(r.Recs, c)
 	}()
 
-	if r.accounts.Get(c.Account, "margin").HasUnits(c.To) {
+	if r.accounts.Get(c.Account).HasUnits(c.To) {
+		c.QueueBefore = append(c.QueueBefore, acc.Read(c.To))
+	}
+
+	if r.accounts.Get(c.Account).HasUnits(c.From) {
+		c.QueueBefore = append(c.QueueBefore, acc.Read(c.From))
+	}
+
+	if acc.HasUnits(c.To) {
 		pastEntries := fifo.EntryList{}
 		isShort := r.marginShortTrades[key]
 
 		if trade.Action == proto.TxAction_BUY {
 			if isShort {
-				pastEntries, err := r.accounts.Get(c.Account, "margin").Take(c.To, c.ToAmount, c.ToDecimals)
+				pastEntries, err := acc.Take(c.To, c.ToAmount, c.ToDecimals)
 				c.FromEntries = []fifo.Asset{pastEntries}
 
 				if err != nil {
@@ -234,15 +252,15 @@ func (r *Generator) processMarginTrade(trade *proto.Trade) (c *Conversion) {
 					return
 				}
 			} else {
-				r.accounts.Get(c.Account, "margin").Add(c.To, fifo.NewEntry(c.ToAmount, c.FromAmountEur, c.FeeEur, c.Ts))
+				acc.Add(c.To, fifo.NewEntry(c.ToAmount, c.FromAmountEur, c.FeeEur, c.Ts))
 			}
 		}
 
 		if trade.Action == proto.TxAction_SELL {
 			if isShort {
-				r.accounts.Get(c.Account, "margin").Add(c.To, fifo.NewEntry(c.ToAmount, c.FromAmountEur, c.FeeEur, c.Ts))
+				acc.Add(c.To, fifo.NewEntry(c.ToAmount, c.FromAmountEur, c.FeeEur, c.Ts))
 			} else {
-				pastEntries, err := r.accounts.Get(c.Account, "margin").Take(c.From, c.FromAmount, c.FromDecimals)
+				pastEntries, err := acc.Take(c.From, c.FromAmount, c.FromDecimals)
 				c.FromEntries = []fifo.Asset{pastEntries}
 
 				if err != nil {
@@ -253,23 +271,26 @@ func (r *Generator) processMarginTrade(trade *proto.Trade) (c *Conversion) {
 		}
 
 		totalCostC := d.Zero
+		// totalCost := d.Zero
 
 		for _, e := range pastEntries {
 			totalCostC = e.UnitCostEur.Mul(e.UnitsLeft).Add(e.UnitFeeCostEur.Mul(e.UnitsLeft))
+			// totalCost = e.UnitCost.Mul(e.UnitsLeft).Add(e.UnitFeeCost.Mul(e.UnitsLeft))
 		}
 
 		c.Result = ConversionResult{
-			CostEur:     totalCostC,
-			ValueEur:    c.FromAmountEur.Sub(c.FeeEur),
+			CostEur:  totalCostC,
+			ValueEur: c.FromAmountEur.Sub(c.FeeEur),
+			// Pnl: c.FromAmount.Sub(c.Fee).Sub(totalCost),
 			PnlEur:      c.FromAmountEur.Sub(c.FeeEur).Sub(totalCostC),
 			FeePayedEur: c.FeeEur,
 		}
 	} else {
 		if trade.Action == proto.TxAction_SELL {
-			r.accounts.Get(c.Account, "margin").Add(c.From, fifo.NewEntry(c.FromAmount, c.ToAmountEur, c.FeeEur, c.Ts))
+			acc.Add(c.From, fifo.NewEntry(c.FromAmount, c.ToAmountEur, c.FeeEur, c.Ts))
 			r.marginShortTrades[key] = true
 		} else {
-			r.accounts.Get(c.Account, "margin").Add(c.To, fifo.NewEntry(c.ToAmount, c.FromAmountEur, c.FeeEur, c.Ts))
+			acc.Add(c.To, fifo.NewEntry(c.ToAmount, c.FromAmountEur, c.FeeEur, c.Ts))
 		}
 	}
 
@@ -291,6 +312,10 @@ func (r *Generator) processMarginTrade(trade *proto.Trade) (c *Conversion) {
 		}
 	}
 
+	// if c.Result.Pnl != nil {
+
+	// }
+
 	return
 }
 
@@ -299,36 +324,30 @@ func (r *Generator) processTrade(trade *proto.Trade) (c *Conversion) {
 		return r.processMarginTrade(trade)
 	}
 
-	if trade.TxID == "TOJR4D-NEMAS-OPPYCO" {
-		fmt.Printf("%+v\n", "now")
-	}
-
 	c = r.TradeToConversion(trade)
 
-	if c.ToAmount.Equal(D("3740.5605")) {
-		fmt.Printf("%+v\n", "now")
-	}
+	acc := r.accounts.Get(c.Account)
 
 	defer func() {
-		if r.accounts.Get(c.Account).HasUnits(c.To) {
-			c.QueueAfter = append(c.QueueAfter, r.accounts.Get(c.Account).Read(c.To))
+		if acc.HasUnits(c.To) {
+			c.QueueAfter = append(c.QueueAfter, acc.Read(c.To))
 		}
 
-		if r.accounts.Get(c.Account).HasUnits(c.From) {
-			c.QueueAfter = append(c.QueueAfter, r.accounts.Get(c.Account).Read(c.From))
+		if acc.HasUnits(c.From) {
+			c.QueueAfter = append(c.QueueAfter, acc.Read(c.From))
 		}
 	}()
 
-	if r.accounts.Get(c.Account).HasUnits(c.To) {
-		c.QueueBefore = append(c.QueueBefore, r.accounts.Get(c.Account).Read(c.To))
+	if acc.HasUnits(c.To) {
+		c.QueueBefore = append(c.QueueBefore, acc.Read(c.To))
 	}
 
-	if r.accounts.Get(c.Account).HasUnits(c.From) {
-		c.QueueBefore = append(c.QueueBefore, r.accounts.Get(c.Account).Read(c.From))
+	if acc.HasUnits(c.From) {
+		c.QueueBefore = append(c.QueueBefore, acc.Read(c.From))
 	}
 
-	r.accounts.Get(c.Account).Add(c.To, fifo.NewEntry(c.ToAmount, c.FromAmountEur, c.FeeEur, c.Ts))
-	assetExtracted, err := r.accounts.Get(c.Account).Take(c.From, c.FromAmount, c.FromDecimals)
+	acc.Add(c.To, fifo.NewEntry(c.ToAmount, c.FromAmountEur, c.FeeEur, c.Ts))
+	assetExtracted, err := acc.Take(c.From, c.FromAmount, c.FromDecimals)
 
 	c.FromEntries = []fifo.Asset{assetExtracted}
 
@@ -340,7 +359,7 @@ func (r *Generator) processTrade(trade *proto.Trade) (c *Conversion) {
 
 	// Remove fee from fifo queue.
 	if !c.Fee.IsZero() {
-		extractedEntries, err := r.accounts.Get(c.Account).Take(c.FeeCurrency, c.Fee, c.FeeDecimals)
+		extractedEntries, err := acc.Take(c.FeeCurrency, c.Fee, c.FeeDecimals)
 
 		if err != nil {
 			golog.Errorf("Failed to take units for %s out of fifo queue to pay fees (ID=%s, TS=%s): %v", c.FeeCurrency, trade.TxID, trade.Ts.AsTime(), err)
@@ -355,9 +374,9 @@ func (r *Generator) processTrade(trade *proto.Trade) (c *Conversion) {
 			// fmt.Printf("%s\n", r.accounts.Get(trade.Account).Read("EUR").Entries.Print())
 		}
 
-		fmt.Printf("%+v\n", r.accounts.Get(c.Account).Read(c.QuoteFeeCurrency).Entries.Print())
-		extractedEntries, err := r.accounts.Get(c.Account).Take(c.QuoteFeeCurrency, c.QuoteFee, c.QuoteFeeDecimals)
-		fmt.Printf("%+v\n", r.accounts.Get(c.Account).Read(c.QuoteFeeCurrency).Entries.Print())
+		fmt.Printf("%+v\n", acc.Read(c.QuoteFeeCurrency).Entries.Print())
+		extractedEntries, err := acc.Take(c.QuoteFeeCurrency, c.QuoteFee, c.QuoteFeeDecimals)
+		fmt.Printf("%+v\n", acc.Read(c.QuoteFeeCurrency).Entries.Print())
 
 		if err != nil {
 			// fmt.Printf("%s\n", r.accounts.Get(trade.Account).Read("EUR").Entries.Print())

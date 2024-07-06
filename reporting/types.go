@@ -81,8 +81,9 @@ type Conversion struct {
 }
 
 type ConversionResult struct {
-	CostEur     d.Decimal // Original cost in EUR of the assets to convert from.
-	ValueEur    d.Decimal // EUR value of the asset when it was obtained.
+	CostEur  d.Decimal // Original cost in EUR of the assets to convert from.
+	ValueEur d.Decimal // EUR value of the asset when it was obtained.
+	// Pnl      d.Decimal
 	PnlEur      d.Decimal
 	FeePayedEur d.Decimal
 }
@@ -90,10 +91,10 @@ type ConversionResult struct {
 // Create a conversion from a trade. Depending on the direction of the trade, assets and prices are assigned accordingly.
 func (r *Generator) TradeToConversion(trade *proto.Trade) *Conversion {
 	if trade.Action == proto.TxAction_BUY {
-		toFee := D(trade.Fee).Abs()
-		toFeeC := D(trade.FeeC).Abs()
-		fromFee := D(trade.QuoteFee).Abs()
-		fromFeeC := D(trade.QuoteFeeC).Abs()
+		toFee := D(trade.Fee.Amount).Abs()
+		toFeeC := D(trade.Fee.AmountC).Abs()
+		fromFee := D(trade.QuoteFee.Amount).Abs()
+		fromFeeC := D(trade.QuoteFee.AmountC).Abs()
 
 		return &Conversion{
 			RecID:            trade.TxID,
@@ -114,13 +115,13 @@ func (r *Generator) TradeToConversion(trade *proto.Trade) *Conversion {
 			FromAmountNet:    D(trade.Value).Sub(fromFee).Round(IfThen(trade.QuoteDecimals > 0, trade.QuoteDecimals, 8)),
 			FromAmountEur:    D(trade.ValueC).Round(4),
 			FromAmountNetEur: D(trade.ValueC).Sub(fromFeeC).Round(4),
-			FeeCurrency:      trade.FeeCurrency,
-			Fee:              D(trade.Fee).Round(IfThen(trade.FeeDecimals > 0, trade.FeeDecimals, 8)),
-			FeeDecimals:      trade.FeeDecimals,
-			QuoteFeeCurrency: trade.QuoteFeeCurrency,
-			QuoteFee:         D(trade.QuoteFee).Round(IfThen(trade.QuoteFeeDecimals > 0, trade.QuoteFeeDecimals, 8)),
-			QuoteFeeDecimals: trade.QuoteFeeDecimals,
-			FeeEur:           D(trade.FeeC).Add(D(trade.QuoteFeeC)).Round(4),
+			FeeCurrency:      trade.Fee.Currency,
+			Fee:              D(trade.Fee.Amount).Round(IfThen(trade.Fee.Decimals > 0, trade.Fee.Decimals, 8)),
+			FeeDecimals:      trade.Fee.Decimals,
+			QuoteFeeCurrency: trade.QuoteFee.Currency,
+			QuoteFee:         D(trade.QuoteFee.Amount).Round(IfThen(trade.QuoteFee.Decimals > 0, trade.QuoteFee.Decimals, 8)),
+			QuoteFeeDecimals: trade.QuoteFee.Decimals,
+			FeeEur:           D(trade.Fee.AmountC).Add(D(trade.QuoteFee.AmountC)).Round(4),
 			IsDerivative:     trade.Props.IsDerivative,
 			IsMarginTrade:    trade.Props.IsMarginTrade,
 			IsPhysical:       trade.Props.IsPhysical,
@@ -150,10 +151,10 @@ func (r *Generator) TradeToConversion(trade *proto.Trade) *Conversion {
 		priceC := D(trade.QuotePriceC)
 		value := D(trade.Amount)
 		toAmount := D(trade.Value)
-		fromFee := D(trade.Fee)
-		fromFeeC := D(trade.FeeC)
-		toFee := D(trade.QuoteFee).Abs()
-		toFeeC := D(trade.QuoteFeeC).Abs()
+		fromFee := D(trade.Fee.Amount)
+		fromFeeC := D(trade.Fee.AmountC)
+		toFee := D(trade.QuoteFee.Amount).Abs()
+		toFeeC := D(trade.QuoteFee.AmountC).Abs()
 		// toFee := D(trade.QuoteFee).Abs()
 		// toFeeC := D(trade.QuoteFeeC).Abs()
 
@@ -178,13 +179,13 @@ func (r *Generator) TradeToConversion(trade *proto.Trade) *Conversion {
 			FromAmountNet:    value.Sub(fromFee),
 			FromAmountEur:    value.Round(4),
 			FromAmountNetEur: value.Sub(fromFeeC).Round(4),
-			FeeCurrency:      trade.FeeCurrency,
-			Fee:              D(trade.Fee),
-			FeeDecimals:      trade.FeeDecimals,
-			QuoteFeeCurrency: trade.QuoteFeeCurrency,
-			QuoteFee:         D(trade.QuoteFee),
-			QuoteFeeDecimals: trade.QuoteFeeDecimals,
-			FeeEur:           D(trade.FeeC).Add(D(trade.QuoteFeeC)).Round(4),
+			FeeCurrency:      trade.Fee.Currency,
+			Fee:              D(trade.Fee.Amount),
+			FeeDecimals:      trade.Fee.Decimals,
+			QuoteFeeCurrency: trade.QuoteFee.Currency,
+			QuoteFee:         D(trade.QuoteFee.Amount),
+			QuoteFeeDecimals: trade.QuoteFee.Decimals,
+			FeeEur:           D(trade.Fee.AmountC).Add(D(trade.QuoteFee.AmountC)).Round(4),
 			IsDerivative:     trade.Props.IsDerivative,
 			IsMarginTrade:    trade.Props.IsMarginTrade,
 			IsPhysical:       trade.Props.IsPhysical,

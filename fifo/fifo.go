@@ -67,8 +67,10 @@ func IsFifoError(err error) bool {
 type Entry struct {
 	Units          d.Decimal
 	UnitsLeft      d.Decimal
+	UnitCost       d.Decimal
 	UnitCostEur    d.Decimal
 	UnitFeeCostEur d.Decimal
+	UnitFeeCost    d.Decimal
 	Ts             time.Time
 }
 
@@ -76,7 +78,9 @@ func (e *Entry) Copy() Entry {
 	return Entry{
 		Units:          e.Units.Copy(),
 		UnitsLeft:      e.UnitsLeft.Copy(),
+		UnitCost:       e.UnitCost.Copy(),
 		UnitCostEur:    e.UnitCostEur.Copy(),
+		UnitFeeCost:    e.UnitFeeCost.Copy(),
 		UnitFeeCostEur: e.UnitFeeCostEur.Copy(),
 		Ts:             e.Ts,
 	}
